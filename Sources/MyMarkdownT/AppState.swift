@@ -37,7 +37,7 @@ final class AppState: ObservableObject {
     @Published private(set) var sidebarNodes: [FileNode] = []
     @Published private(set) var pendingScrollAnchor: String?
     @Published private(set) var scrollRequestID = UUID()
-    @Published var viewMode: ViewMode = .split
+    @Published var viewMode: ViewMode = .preview
     @Published private(set) var isDirty = false
     @Published var lastErrorMessage: String?
     @Published var transientNotice: String?

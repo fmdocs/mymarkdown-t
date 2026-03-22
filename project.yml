@@ -41,10 +41,29 @@ targets:
       # 引用上面声明的 SwiftPM 包，让 Xcode 工程能正确链接 MarkdownUI。
       - package: swift-markdown-ui
         product: MarkdownUI
+      # Quick Look 预览扩展，嵌入 .app/Contents/PlugIns/ 中。
+      - target: QLExtension
+        embed: true
+        codeSign: true
     settings:
       base:
         PRODUCT_NAME: MyMarkdownT
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+  QLExtension:
+    # Quick Look Preview Extension：在 Finder 按空格键时渲染 Markdown 文件。
+    type: app-extension
+    platform: macOS
+    deploymentTarget: "15.0"
+    sources:
+      - path: Sources/QLExtension
+    settings:
+      base:
+        PRODUCT_NAME: QLExtension
+        PRODUCT_BUNDLE_IDENTIFIER: com.example.MyMarkdownT.QLExtension
+        GENERATE_INFOPLIST_FILE: NO
+        INFOPLIST_FILE: Xcode/Support/QLExtension-Info.plist
+        SKIP_INSTALL: YES
+        LD_RUNPATH_SEARCH_PATHS: "$(inherited) @executable_path/../Frameworks @executable_path/../../../../Frameworks"
   MyMarkdownTTests:
     # 测试目标保持独立，方便在 Xcode 和 SwiftPM 中共用测试代码。
     type: bundle.unit-test

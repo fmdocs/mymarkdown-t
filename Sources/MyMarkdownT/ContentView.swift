@@ -83,37 +83,8 @@ struct ContentView: View {
                 Text("打开文件夹以浏览 Markdown 文件")
                     .foregroundStyle(.secondary)
             } else {
-                OutlineGroup(state.sidebarNodes, children: \.children) { node in
-                    if node.isDirectory {
-                        Label(node.name, systemImage: "folder")
-                            .contextMenu {
-                                Button(role: .destructive) {
-                                    nodeToDelete = node
-                                } label: {
-                                    Label("移至废纸篓", systemImage: "trash")
-                                }
-                            }
-                    } else {
-                        Label(node.name, systemImage: "doc.text")
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 4)
-                            .background(
-                                RoundedRectangle(cornerRadius: 6)
-                                    .fill(state.isCurrentFile(node.url) ? Color.accentColor.opacity(0.18) : .clear)
-                            )
-                            .contentShape(Rectangle())
-                            .onTapGesture {
-                                state.openFile(at: node.url)
-                            }
-                            .contextMenu {
-                                Button(role: .destructive) {
-                                    nodeToDelete = node
-                                } label: {
-                                    Label("移至废纸篓", systemImage: "trash")
-                                }
-                            }
-                    }
+                ForEach(state.sidebarNodes) { node in
+                    SidebarNodeRow(node: node, state: state, nodeToDelete: $nodeToDelete)
                 }
             }
         }
@@ -446,5 +417,57 @@ private struct LocalInlineImageProvider: InlineImageProvider {
         }
 
         return Image(nsImage: image)
+    }
+}
+
+// MARK: - Sidebar recursive node view
+
+private struct SidebarNodeRow: View {
+    let node: FileNode
+    @ObservedObject var state: AppState
+    @Binding var nodeToDelete: FileNode?
+    @State private var isExpanded = true
+
+    var body: some View {
+        if node.isDirectory, let children = node.children {
+            DisclosureGroup(isExpanded: $isExpanded) {
+                ForEach(children) { child in
+                    SidebarNodeRow(node: child, state: state, nodeToDelete: $nodeToDelete)
+                }
+            } label: {
+                Label(node.name, systemImage: "folder")
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        withAnimation { isExpanded.toggle() }
+                    }
+            }
+            .contextMenu {
+                Button(role: .destructive) {
+                    nodeToDelete = node
+                } label: {
+                    Label("移至废纸篓", systemImage: "trash")
+                }
+            }
+        } else if !node.isDirectory {
+            Label(node.name, systemImage: "doc.text")
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 6)
+                .padding(.vertical, 4)
+                .background(
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(state.isCurrentFile(node.url) ? Color.accentColor.opacity(0.18) : .clear)
+                )
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    state.openFile(at: node.url)
+                }
+                .contextMenu {
+                    Button(role: .destructive) {
+                        nodeToDelete = node
+                    } label: {
+                        Label("移至废纸篓", systemImage: "trash")
+                    }
+                }
+        }
     }
 }
