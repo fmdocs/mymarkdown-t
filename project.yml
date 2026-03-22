@@ -36,6 +36,7 @@ targets:
     deploymentTarget: "15.0"
     sources:
       - path: Sources/MyMarkdownT
+      - path: Resources
     dependencies:
       # 引用上面声明的 SwiftPM 包，让 Xcode 工程能正确链接 MarkdownUI。
       - package: swift-markdown-ui
@@ -43,6 +44,7 @@ targets:
     settings:
       base:
         PRODUCT_NAME: MyMarkdownT
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
   MyMarkdownTTests:
     # 测试目标保持独立，方便在 Xcode 和 SwiftPM 中共用测试代码。
     type: bundle.unit-test

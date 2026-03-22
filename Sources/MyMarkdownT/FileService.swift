@@ -38,10 +38,22 @@ enum FileService {
 
     @MainActor
     static func chooseFolder() -> URL? {
+        chooseFolder(startingAt: nil, message: nil, prompt: nil)
+    }
+
+    @MainActor
+    static func chooseFolder(startingAt directoryURL: URL?, message: String?, prompt: String?) -> URL? {
         let panel = NSOpenPanel()
         panel.canChooseFiles = false
         panel.canChooseDirectories = true
         panel.allowsMultipleSelection = false
+        panel.directoryURL = directoryURL
+        if let message {
+            panel.message = message
+        }
+        if let prompt {
+            panel.prompt = prompt
+        }
 
         return panel.runModal() == .OK ? panel.url : nil
     }
@@ -77,34 +89,42 @@ enum FileService {
     }
 
     static func readText(from url: URL) throws -> String {
-        do {
-            return try String(contentsOf: url, encoding: .utf8)
-        } catch {
-            throw FileServiceError.unreadable
+        try withSecurityScopedAccess(to: url) {
+            do {
+                return try String(contentsOf: url, encoding: .utf8)
+            } catch {
+                throw FileServiceError.unreadable
+            }
         }
     }
 
     static func writeText(_ content: String, to url: URL) throws {
-        do {
-            try content.write(to: url, atomically: true, encoding: .utf8)
-        } catch {
-            throw FileServiceError.unwritable
+        try withSecurityScopedAccess(to: url) {
+            do {
+                try content.write(to: url, atomically: true, encoding: .utf8)
+            } catch {
+                throw FileServiceError.unwritable
+            }
         }
     }
 
     static func writeData(_ data: Data, to url: URL) throws {
-        do {
-            try data.write(to: url, options: .atomic)
-        } catch {
-            throw FileServiceError.unwritable
+        try withSecurityScopedAccess(to: url) {
+            do {
+                try data.write(to: url, options: .atomic)
+            } catch {
+                throw FileServiceError.unwritable
+            }
         }
     }
 
     static func deleteItem(at url: URL) throws {
-        do {
-            try FileManager.default.trashItem(at: url, resultingItemURL: nil)
-        } catch {
-            throw FileServiceError.unwritable
+        try withSecurityScopedAccess(to: url) {
+            do {
+                try FileManager.default.trashItem(at: url, resultingItemURL: nil)
+            } catch {
+                throw FileServiceError.unwritable
+            }
         }
     }
 
@@ -143,6 +163,10 @@ enum FileService {
 
     static func isMarkdownFile(_ url: URL) -> Bool {
         markdownExtensions.contains(url.pathExtension.lowercased())
+    }
+
+    static func isDirectory(_ url: URL) -> Bool {
+        (try? url.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) ?? false
     }
 
     static func resolveMarkdownLink(_ url: URL, relativeTo documentURL: URL?) -> MarkdownLinkDestination? {
@@ -185,12 +209,16 @@ enum FileService {
     }
 
     static func buildTree(root: URL) -> [FileNode] {
-        let manager = FileManager.default
-        guard let children = try? manager.contentsOfDirectory(
-            at: root,
-            includingPropertiesForKeys: [.isDirectoryKey],
-            options: [.skipsHiddenFiles]
-        ) else {
+        let children: [URL]
+        do {
+            children = try withSecurityScopedAccess(to: root) {
+                try FileManager.default.contentsOfDirectory(
+                    at: root,
+                    includingPropertiesForKeys: [.isDirectoryKey],
+                    options: [.skipsHiddenFiles]
+                )
+            }
+        } catch {
             return []
         }
 
@@ -232,6 +260,17 @@ enum FileService {
                 children: nil
             )
         }
+    }
+
+    private static func withSecurityScopedAccess<T>(to url: URL, operation: () throws -> T) throws -> T {
+        let didStartAccess = url.startAccessingSecurityScopedResource()
+        defer {
+            if didStartAccess {
+                url.stopAccessingSecurityScopedResource()
+            }
+        }
+
+        return try operation()
     }
 }
 

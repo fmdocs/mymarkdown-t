@@ -40,15 +40,17 @@ final class AppState: ObservableObject {
     @Published var viewMode: ViewMode = .split
     @Published private(set) var isDirty = false
     @Published var lastErrorMessage: String?
+    @Published var transientNotice: String?
 
     private var lastSavedContent = ""
     private var isApplyingFileLoad = false
+    private var transientNoticeTask: Task<Void, Never>?
 
     func openFilePanel() {
         guard let selected = FileService.chooseMarkdownFile() else {
             return
         }
-        openFile(at: selected)
+        _ = handleIncomingItems([selected])
     }
 
     func openFolderPanel() {
@@ -56,8 +58,26 @@ final class AppState: ObservableObject {
             return
         }
 
-        sidebarRootURL = selected
-        sidebarNodes = FileService.buildTree(root: selected)
+        revealFolder(selected)
+    }
+
+    @discardableResult
+    func handleIncomingItems(_ urls: [URL]) -> Bool {
+        let normalizedURLs = urls.map(\.standardizedFileURL)
+
+        if let markdownFile = normalizedURLs.first(where: FileService.isMarkdownFile(_:)) {
+            revealContext(for: markdownFile)
+            openFile(at: markdownFile)
+            return true
+        }
+
+        if let folder = normalizedURLs.first(where: FileService.isDirectory(_:)) {
+            revealFolder(folder)
+            return true
+        }
+
+        lastErrorMessage = "无法打开拖入或传入的项目。"
+        return false
     }
 
     func refreshSidebar() {
@@ -193,6 +213,75 @@ final class AppState: ObservableObject {
     private func requestScroll(to anchor: String?) {
         pendingScrollAnchor = anchor
         scrollRequestID = UUID()
+    }
+
+    private func revealContext(for fileURL: URL) {
+        let folderURL = fileURL.deletingLastPathComponent().standardizedFileURL
+        let nodes = FileService.buildTree(root: folderURL)
+
+        sidebarRootURL = folderURL
+        if containsFile(fileURL, in: nodes) {
+            sidebarNodes = nodes
+        } else {
+            sidebarNodes = [
+                FileNode(
+                    url: fileURL,
+                    name: fileURL.lastPathComponent,
+                    isDirectory: false,
+                    children: nil
+                )
+            ]
+
+            requestFolderAuthorization(for: fileURL)
+        }
+    }
+
+    private func revealFolder(_ folderURL: URL) {
+        sidebarRootURL = folderURL.standardizedFileURL
+        sidebarNodes = FileService.buildTree(root: folderURL.standardizedFileURL)
+    }
+
+    private func containsFile(_ url: URL, in nodes: [FileNode]) -> Bool {
+        let targetURL = url.standardizedFileURL
+        for node in nodes {
+            if node.url.standardizedFileURL == targetURL {
+                return true
+            }
+
+            if let children = node.children, containsFile(targetURL, in: children) {
+                return true
+            }
+        }
+
+        return false
+    }
+
+    private func requestFolderAuthorization(for fileURL: URL) {
+        let folderURL = fileURL.deletingLastPathComponent().standardizedFileURL
+        guard let authorizedFolder = FileService.chooseFolder(
+            startingAt: folderURL,
+            message: "要浏览所在目录，请授权该文件夹",
+            prompt: "授权文件夹"
+        ) else {
+            showTransientNotice("未授权文件夹访问，当前仅显示已打开文件")
+            return
+        }
+
+        revealFolder(authorizedFolder)
+        currentFileURL = fileURL.standardizedFileURL
+        showTransientNotice("已授权文件夹访问")
+    }
+
+    private func showTransientNotice(_ message: String) {
+        transientNoticeTask?.cancel()
+        transientNotice = message
+
+        transientNoticeTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 2_500_000_000)
+            if !Task.isCancelled {
+                transientNotice = nil
+            }
+        }
     }
 
     private func applyLoadedContent(_ text: String) {

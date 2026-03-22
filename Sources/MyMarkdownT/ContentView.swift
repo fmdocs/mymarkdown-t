@@ -3,7 +3,7 @@ import SwiftUI
 import MarkdownUI
 
 struct ContentView: View {
-    @StateObject private var state = AppState()
+    @ObservedObject var state: AppState
     @State private var nodeToDelete: FileNode?
 
     var body: some View {
@@ -13,17 +13,39 @@ struct ContentView: View {
             workspace
         }
         .navigationTitle(title)
+        .safeAreaInset(edge: .top, spacing: 0) {
+            if let transientNotice = state.transientNotice {
+                noticeBanner(transientNotice)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+            }
+        }
+        .dropDestination(for: URL.self) { items, _ in
+            state.handleIncomingItems(items)
+        }
         .environment(\.openURL, OpenURLAction { url in
             state.openLink(url) ? .handled : .discarded
         })
         .toolbar {
             ToolbarItemGroup(placement: .automatic) {
-                Button("打开文件") { state.openFilePanel() }
-                Button("打开文件夹") { state.openFolderPanel() }
-                Button("保存") { state.save() }
-                Button("另存为") { state.saveAs() }
-                Button("导出 HTML") { state.exportHTML() }
-                Button("导出 PDF") { state.exportPDF() }
+                Menu {
+                    Button("打开文件…") { state.openFilePanel() }
+                    Button("打开文件夹…") { state.openFolderPanel() }
+                } label: {
+                    Label("打开", systemImage: "folder.badge.plus")
+                }
+                Button(action: { state.save() }) {
+                    Text("保存")
+                        .foregroundStyle(state.isDirty ? Color.white : Color.primary)
+                        .fontWeight(state.isDirty ? .semibold : .regular)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background(
+                            RoundedRectangle(cornerRadius: 6)
+                                .fill(state.isDirty ? Color.accentColor : Color.clear)
+                        )
+                }
+                .buttonStyle(.plain)
+                .animation(.easeInOut(duration: 0.15), value: state.isDirty)
             }
 
             ToolbarItem(placement: .automatic) {
@@ -271,6 +293,23 @@ struct ContentView: View {
     private var title: String {
         let name = state.currentFileURL?.lastPathComponent ?? "未命名"
         return state.isDirty ? "\(name) *" : name
+    }
+
+    private func noticeBanner(_ message: String) -> some View {
+        HStack {
+            Image(systemName: "info.circle.fill")
+                .foregroundStyle(.blue)
+            Text(message)
+                .font(.callout)
+                .foregroundStyle(.primary)
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .background(.thinMaterial)
+        .overlay(alignment: .bottom) {
+            Divider()
+        }
     }
 }
 
