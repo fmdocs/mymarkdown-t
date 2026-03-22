@@ -1,18 +1,94 @@
 import SwiftUI
 
+// MARK: - Per-window focused value
+
+private struct AppStateFocusedValueKey: FocusedValueKey {
+    typealias Value = AppState
+}
+
+extension FocusedValues {
+    var appState: AppState? {
+        get { self[AppStateFocusedValueKey.self] }
+        set { self[AppStateFocusedValueKey.self] = newValue }
+    }
+}
+
 // MARK: - File menu commands
 
 struct AppCommands: Commands {
-    let appState: AppState
+    @FocusedValue(\.appState) private var appState
 
     var body: some Commands {
         CommandGroup(after: .saveItem) {
-            Button("另存为…") { appState.saveAs() }
+            Button("另存为…") { appState?.saveAs() }
                 .keyboardShortcut("S", modifiers: [.command, .shift])
+                .disabled(appState == nil)
             Divider()
-            Button("导出 HTML…") { appState.exportHTML() }
-            Button("导出 PDF…") { appState.exportPDF() }
+            Button("导出 HTML…") { appState?.exportHTML() }
+                .disabled(appState == nil)
+            Button("导出 PDF…") { appState?.exportPDF() }
+                .disabled(appState == nil)
         }
+    }
+}
+
+// MARK: - File open coordinator
+
+@MainActor
+final class FileOpenCoordinator {
+    static let shared = FileOpenCoordinator()
+
+    private var pendingURLs: [URL] = []
+    private var openWindowAction: OpenWindowAction?
+    private weak var emptyWindowState: AppState?
+
+    var isReady: Bool { openWindowAction != nil }
+
+    func registerWindow(_ state: AppState, openWindow action: OpenWindowAction) {
+        openWindowAction = action
+        if state.currentFileURL == nil {
+            emptyWindowState = state
+        }
+    }
+
+    func enqueue(_ url: URL) {
+        pendingURLs.append(url)
+    }
+
+    func dequeue() -> URL? {
+        pendingURLs.isEmpty ? nil : pendingURLs.removeFirst()
+    }
+
+    func openFile(_ url: URL) {
+        // Reuse an existing empty window if available
+        if let state = emptyWindowState, state.currentFileURL == nil {
+            emptyWindowState = nil
+            _ = state.handleIncomingItems([url])
+            return
+        }
+
+        emptyWindowState = nil
+        enqueue(url)
+        openWindowAction?.callAsFunction(id: "document")
+    }
+}
+
+// MARK: - Per-window document wrapper
+
+private struct DocumentWindow: View {
+    @StateObject private var appState = AppState()
+    @Environment(\.openWindow) private var openWindow
+
+    var body: some View {
+        ContentView(state: appState)
+            .focusedSceneValue(\.appState, appState)
+            .onAppear {
+                let coordinator = FileOpenCoordinator.shared
+                coordinator.registerWindow(appState, openWindow: openWindow)
+                if let url = coordinator.dequeue() {
+                    _ = appState.handleIncomingItems([url])
+                }
+            }
     }
 }
 
@@ -20,40 +96,27 @@ struct AppCommands: Commands {
 
 @main
 struct MyMarkdownTApp: App {
-    @StateObject private var appState = AppState()
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
 
     var body: some Scene {
-        WindowGroup {
-            ContentView(state: appState)
+        WindowGroup(id: "document") {
+            DocumentWindow()
                 .frame(minWidth: 900, minHeight: 560)
-                .onAppear {
-                    appDelegate.attach(appState)
-                }
         }
         .windowStyle(.titleBar)
         .commands {
             CommandGroup(replacing: .newItem) {
                 EmptyView()
             }
-            AppCommands(appState: appState)
+            AppCommands()
         }
     }
 }
 
+// MARK: - AppDelegate
+
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
-    private weak var appState: AppState?
-    private var pendingURLs: [URL] = []
-
-    func attach(_ appState: AppState) {
-        self.appState = appState
-
-        guard !pendingURLs.isEmpty else { return }
-        let queued = pendingURLs
-        pendingURLs.removeAll()
-        _ = appState.handleIncomingItems(queued)
-    }
 
     func application(_ sender: NSApplication, openFiles filenames: [String]) {
         let urls = filenames.map { URL(fileURLWithPath: $0).standardizedFileURL }
@@ -62,13 +125,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
 
-        if let appState {
-            let handled = appState.handleIncomingItems(urls)
-            sender.reply(toOpenOrPrint: handled ? .success : .failure)
-            return
-        }
-
-        pendingURLs.append(contentsOf: urls)
+        routeURLs(urls)
         sender.reply(toOpenOrPrint: .success)
+    }
+
+    func application(_ application: NSApplication, open urls: [URL]) {
+        routeURLs(urls.map(\.standardizedFileURL))
+    }
+
+    private func routeURLs(_ urls: [URL]) {
+        let coordinator = FileOpenCoordinator.shared
+        for url in urls {
+            if coordinator.isReady {
+                coordinator.openFile(url)
+            } else {
+                coordinator.enqueue(url)
+            }
+        }
     }
 }

@@ -1,0 +1,24 @@
+{
+    "configurations": [
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:mymarkdown-t}",
+            "name": "Debug mymarkdown-t",
+            "target": "mymarkdown-t",
+            "configuration": "debug",
+            "preLaunchTask": "swift: Build Debug mymarkdown-t"
+        },
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:mymarkdown-t}",
+            "name": "Release mymarkdown-t",
+            "target": "mymarkdown-t",
+            "configuration": "release",
+            "preLaunchTask": "swift: Build Release mymarkdown-t"
+        }
+    ]
+}
