@@ -1,0 +1,15 @@
+// App 的唯一标识，发布前必须替换成你自己的 bundle identifier。
+PRODUCT_BUNDLE_IDENTIFIER = com.example.MyMarkdownT
+
+// Xcode 中显示的产品名，也是默认的 .app 名称。
+PRODUCT_NAME = MyMarkdownT
+
+// 面向用户展示的版本号，例如 1.0.0。
+MARKETING_VERSION = 0.1.0
+
+// 构建号，通常在每次发布时递增。
+CURRENT_PROJECT_VERSION = 1
+
+// Apple Developer Team ID；需要签名和归档时填写。
+DEVELOPMENT_TEAM =
+

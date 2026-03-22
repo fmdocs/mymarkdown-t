@@ -1,0 +1,4 @@
+#include "Base.xcconfig"
+
+// Debug 构建才启用 DEBUG 编译条件。
+SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG
