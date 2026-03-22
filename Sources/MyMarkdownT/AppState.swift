@@ -60,6 +60,30 @@ final class AppState: ObservableObject {
         sidebarNodes = FileService.buildTree(root: selected)
     }
 
+    func refreshSidebar() {
+        guard let root = sidebarRootURL else { return }
+        sidebarNodes = FileService.buildTree(root: root)
+    }
+
+    func deleteNode(_ node: FileNode) {
+        do {
+            try FileService.deleteItem(at: node.url)
+            if let current = currentFileURL {
+                let deletedPath = node.url.standardizedFileURL.path
+                let currentPath = current.path
+                if currentPath == deletedPath || currentPath.hasPrefix(deletedPath + "/") {
+                    currentFileURL = nil
+                    content = ""
+                    strippedContent = ""
+                    headingAnchors = []
+                }
+            }
+            refreshSidebar()
+        } catch {
+            lastErrorMessage = "删除失败，无法移至废纸篓。"
+        }
+    }
+
     func openFile(at url: URL, anchor: String? = nil) {
         let normalizedURL = url.standardizedFileURL
 

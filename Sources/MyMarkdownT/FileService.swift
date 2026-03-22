@@ -100,6 +100,14 @@ enum FileService {
         }
     }
 
+    static func deleteItem(at url: URL) throws {
+        do {
+            try FileManager.default.trashItem(at: url, resultingItemURL: nil)
+        } catch {
+            throw FileServiceError.unwritable
+        }
+    }
+
     @MainActor
     static func renderPDF(fromHTML html: String, baseURL: URL?) async throws -> Data {
         let webView = WKWebView(frame: NSRect(x: 0, y: 0, width: 1024, height: 1448))
@@ -109,9 +117,23 @@ enum FileService {
 
         try await delegate.waitForFinish()
 
-        let configuration = WKPDFConfiguration()
-        configuration.rect = CGRect(x: 0, y: 0, width: 1024, height: 1448)
+        // 查询完整文档高度，确保 PDF 包含全部内容
+        let fullHeight: CGFloat
+        do {
+            let result = try await webView.evaluateJavaScript("document.documentElement.scrollHeight")
+            fullHeight = (result as? Double).map { CGFloat($0) } ?? 1448
+        } catch {
+            fullHeight = 1448
+        }
 
+        if fullHeight > webView.frame.height {
+            webView.frame = NSRect(x: 0, y: 0, width: 1024, height: fullHeight)
+            // 等待重新布局完成
+            try? await Task.sleep(nanoseconds: 300_000_000)
+        }
+
+        let configuration = WKPDFConfiguration()
+        // 不设 configuration.rect，让 WebKit 渲染整个 webView 帧
         do {
             return try await webView.pdf(configuration: configuration)
         } catch {

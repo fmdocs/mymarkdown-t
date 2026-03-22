@@ -4,6 +4,7 @@ import MarkdownUI
 
 struct ContentView: View {
     @StateObject private var state = AppState()
+    @State private var nodeToDelete: FileNode?
 
     var body: some View {
         NavigationSplitView {
@@ -63,6 +64,13 @@ struct ContentView: View {
                 OutlineGroup(state.sidebarNodes, children: \.children) { node in
                     if node.isDirectory {
                         Label(node.name, systemImage: "folder")
+                            .contextMenu {
+                                Button(role: .destructive) {
+                                    nodeToDelete = node
+                                } label: {
+                                    Label("移至废纸篓", systemImage: "trash")
+                                }
+                            }
                     } else {
                         Label(node.name, systemImage: "doc.text")
                             .frame(maxWidth: .infinity, alignment: .leading)
@@ -76,8 +84,37 @@ struct ContentView: View {
                             .onTapGesture {
                                 state.openFile(at: node.url)
                             }
+                            .contextMenu {
+                                Button(role: .destructive) {
+                                    nodeToDelete = node
+                                } label: {
+                                    Label("移至废纸篓", systemImage: "trash")
+                                }
+                            }
                     }
                 }
+            }
+        }
+        .confirmationDialog(
+            "确认删除",
+            isPresented: Binding(
+                get: { nodeToDelete != nil },
+                set: { if !$0 { nodeToDelete = nil } }
+            ),
+            titleVisibility: .visible
+        ) {
+            if let node = nodeToDelete {
+                Button("移至废纸篓", role: .destructive) {
+                    state.deleteNode(node)
+                    nodeToDelete = nil
+                }
+                Button("取消", role: .cancel) {
+                    nodeToDelete = nil
+                }
+            }
+        } message: {
+            if let node = nodeToDelete {
+                Text("\"\(node.name)\" 将被移至废纸篓")
             }
         }
     }

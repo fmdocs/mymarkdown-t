@@ -69,6 +69,13 @@ enum MarkdownRenderer {
                             vertical-align: top;
                         }
                         img { max-width: 100%; height: auto; }
+                        @page { size: A4; margin: 20mm; }
+                        @media print {
+                            body { max-width: none; padding: 0; }
+                            pre { white-space: pre-wrap; }
+                            h1,h2,h3,h4,h5,h6 { page-break-after: avoid; }
+                            pre, blockquote, img, table { page-break-inside: avoid; }
+                        }
                     </style>
                 </head>
                 <body>
