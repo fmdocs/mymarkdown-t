@@ -26,6 +26,14 @@ struct ContentView: View {
             state.openLink(url) ? .handled : .discarded
         })
         .toolbar {
+            ToolbarItem(placement: .navigation) {
+                Button(action: { state.goBack() }) {
+                    Label("返回", systemImage: "chevron.left")
+                }
+                .disabled(!state.canGoBack)
+                .help(breadcrumbTooltip)
+            }
+
             ToolbarItemGroup(placement: .automatic) {
                 Menu {
                     Button("打开文件…") { state.openFilePanel() }
@@ -264,6 +272,11 @@ struct ContentView: View {
     private var title: String {
         let name = state.currentFileURL?.lastPathComponent ?? "未命名"
         return state.isDirty ? "\(name) *" : name
+    }
+
+    private var breadcrumbTooltip: String {
+        guard let last = state.navigationStack.last else { return "返回" }
+        return "返回 \(last.lastPathComponent)"
     }
 
     private func noticeBanner(_ message: String) -> some View {

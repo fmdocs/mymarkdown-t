@@ -56,6 +56,11 @@ targets:
     deploymentTarget: "15.0"
     sources:
       - path: Sources/QLExtension
+    entitlements:
+      path: Xcode/Support/QLExtension.entitlements
+      properties:
+        com.apple.security.app-sandbox: true
+        com.apple.security.network.client: true
     settings:
       base:
         PRODUCT_NAME: QLExtension

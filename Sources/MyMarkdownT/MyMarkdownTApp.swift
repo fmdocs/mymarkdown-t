@@ -29,6 +29,11 @@ struct AppCommands: Commands {
             Button("导出 PDF…") { appState?.exportPDF() }
                 .disabled(appState == nil)
         }
+        CommandGroup(after: .toolbar) {
+            Button("返回") { appState?.goBack() }
+                .keyboardShortcut("[", modifiers: .command)
+                .disabled(appState?.canGoBack != true)
+        }
     }
 }
 

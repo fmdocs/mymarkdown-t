@@ -41,9 +41,13 @@ final class AppState: ObservableObject {
     @Published private(set) var isDirty = false
     @Published var lastErrorMessage: String?
     @Published var transientNotice: String?
+    @Published private(set) var navigationStack: [URL] = []
+
+    var canGoBack: Bool { !navigationStack.isEmpty }
 
     private var lastSavedContent = ""
     private var isApplyingFileLoad = false
+    private var isNavigatingBack = false
     private var transientNoticeTask: Task<Void, Never>?
 
     func openFilePanel() {
@@ -107,6 +111,10 @@ final class AppState: ObservableObject {
     func openFile(at url: URL, anchor: String? = nil) {
         let normalizedURL = url.standardizedFileURL
 
+        if !isNavigatingBack, let current = currentFileURL, current != normalizedURL {
+            navigationStack.append(current)
+        }
+
         do {
             currentFileURL = normalizedURL
             let text = try FileService.readText(from: normalizedURL)
@@ -115,6 +123,13 @@ final class AppState: ObservableObject {
         } catch {
             lastErrorMessage = "无法打开文件。"
         }
+    }
+
+    func goBack() {
+        guard let previousURL = navigationStack.popLast() else { return }
+        isNavigatingBack = true
+        openFile(at: previousURL)
+        isNavigatingBack = false
     }
 
     func save() {

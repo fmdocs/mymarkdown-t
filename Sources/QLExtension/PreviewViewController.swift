@@ -3,35 +3,28 @@ import Quartz
 import WebKit
 
 @MainActor
-final class PreviewViewController: NSViewController, @preconcurrency QLPreviewingController {
-    private let webView = WKWebView()
+final class PreviewViewController: NSViewController, QLPreviewingController {
+    private var webView: WKWebView!
 
     override func loadView() {
+        let config = WKWebViewConfiguration()
+        config.preferences.setValue(true, forKey: "developerExtrasEnabled")
+        webView = WKWebView(frame: NSRect(x: 0, y: 0, width: 600, height: 400), configuration: config)
+        webView.autoresizingMask = [.width, .height]
         view = webView
     }
 
-    private static let markdownExtensions: Set<String> = ["md", "markdown", "mdx", "yfm"]
-
-    func preparePreviewOfFile(at url: URL, completionHandler handler: @escaping (Error?) -> Void) {
-        let ext = url.pathExtension.lowercased()
-        guard Self.markdownExtensions.contains(ext) else {
-            handler(CocoaError(.fileReadUnsupportedScheme))
-            return
-        }
-
-        do {
-            let markdown = try String(contentsOf: url, encoding: .utf8)
-            let html = Self.renderHTML(from: markdown, baseURL: url.deletingLastPathComponent())
-            webView.loadHTMLString(html, baseURL: url.deletingLastPathComponent())
-            handler(nil)
-        } catch {
-            handler(error)
+    nonisolated func preparePreviewOfFile(at url: URL) async throws {
+        let markdown = try String(contentsOf: url, encoding: .utf8)
+        let html = Self.renderHTML(from: markdown)
+        _ = await MainActor.run { [webView] in
+            webView?.loadHTMLString(html, baseURL: url.deletingLastPathComponent())
         }
     }
 
     // MARK: - Markdown → HTML
 
-    private static func renderHTML(from markdown: String, baseURL: URL) -> String {
+    nonisolated private static func renderHTML(from markdown: String) -> String {
         let body = markdownToHTML(markdown)
         return """
         <!DOCTYPE html>
@@ -107,7 +100,7 @@ final class PreviewViewController: NSViewController, @preconcurrency QLPreviewin
         """
     }
 
-    private static func markdownToHTML(_ markdown: String) -> String {
+    nonisolated private static func markdownToHTML(_ markdown: String) -> String {
         let lines = markdown.components(separatedBy: "\n")
         var result: [String] = []
         var i = 0
@@ -267,7 +260,7 @@ final class PreviewViewController: NSViewController, @preconcurrency QLPreviewin
 
     // MARK: - Inline markdown
 
-    private static func inlineMarkdown(_ text: String) -> String {
+    nonisolated private static func inlineMarkdown(_ text: String) -> String {
         var s = escapeHTML(text)
 
         // Images: ![alt](url)
@@ -327,14 +320,14 @@ final class PreviewViewController: NSViewController, @preconcurrency QLPreviewin
 
     // MARK: - Helpers
 
-    private static func escapeHTML(_ text: String) -> String {
+    nonisolated private static func escapeHTML(_ text: String) -> String {
         text.replacingOccurrences(of: "&", with: "&amp;")
             .replacingOccurrences(of: "<", with: "&lt;")
             .replacingOccurrences(of: ">", with: "&gt;")
             .replacingOccurrences(of: "\"", with: "&quot;")
     }
 
-    private static func parseATXHeading(_ line: String) -> (Int, String)? {
+    nonisolated private static func parseATXHeading(_ line: String) -> (Int, String)? {
         var level = 0
         for ch in line {
             if ch == "#" { level += 1 } else { break }
@@ -344,7 +337,7 @@ final class PreviewViewController: NSViewController, @preconcurrency QLPreviewin
         return (level, rest)
     }
 
-    private static func isHorizontalRule(_ line: String) -> Bool {
+    nonisolated private static func isHorizontalRule(_ line: String) -> Bool {
         let stripped = line.replacingOccurrences(of: " ", with: "")
         if stripped.count >= 3 {
             if stripped.allSatisfy({ $0 == "-" }) { return true }
@@ -354,18 +347,18 @@ final class PreviewViewController: NSViewController, @preconcurrency QLPreviewin
         return false
     }
 
-    private static func isUnorderedListItem(_ line: String) -> Bool {
+    nonisolated private static func isUnorderedListItem(_ line: String) -> Bool {
         line.hasPrefix("- ") || line.hasPrefix("* ") || line.hasPrefix("+ ")
     }
 
-    private static func isOrderedListItem(_ line: String) -> Bool {
+    nonisolated private static func isOrderedListItem(_ line: String) -> Bool {
         guard let dotIndex = line.firstIndex(of: ".") else { return false }
         let prefix = line[line.startIndex..<dotIndex]
         return prefix.allSatisfy(\.isNumber) && !prefix.isEmpty
             && line.index(after: dotIndex) < line.endIndex
     }
 
-    private static func parseTable(_ lines: [String]) -> String {
+    nonisolated private static func parseTable(_ lines: [String]) -> String {
         func cells(from line: String) -> [String] {
             var raw = line.trimmingCharacters(in: .whitespaces)
             if raw.hasPrefix("|") { raw = String(raw.dropFirst()) }
