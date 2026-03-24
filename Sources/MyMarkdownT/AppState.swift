@@ -3,7 +3,7 @@ import Foundation
 
 enum ViewMode: String, CaseIterable, Identifiable {
     case editor
-    case split
+    case inline
     case preview
 
     var id: String { rawValue }
@@ -12,8 +12,8 @@ enum ViewMode: String, CaseIterable, Identifiable {
         switch self {
         case .editor:
             return "编辑"
-        case .split:
-            return "分栏"
+        case .inline:
+            return "内联"
         case .preview:
             return "预览"
         }
@@ -42,6 +42,10 @@ final class AppState: ObservableObject {
     @Published var lastErrorMessage: String?
     @Published var transientNotice: String?
     @Published private(set) var navigationStack: [URL] = []
+
+    // MARK: - Inline editing state
+    @Published var blocks: [MarkdownBlock] = []
+    @Published var editingBlockID: UUID?
 
     var canGoBack: Bool { !navigationStack.isEmpty }
 
@@ -312,5 +316,50 @@ final class AppState: ObservableObject {
         let rendered = MarkdownRenderer.prepare(markdown: content, baseURL: currentDocumentBaseURL)
         strippedContent = rendered.markdown
         headingAnchors = rendered.headingAnchors
+    }
+
+    // MARK: - Inline editing
+
+    func reparseBlocks() {
+        let newBlocks = MarkdownBlockParser.parse(content)
+        // Preserve IDs for blocks whose text hasn't changed to avoid flicker.
+        if blocks.count == newBlocks.count {
+            var merged: [MarkdownBlock] = []
+            for (old, new) in zip(blocks, newBlocks) {
+                if old.text == new.text && old.blockType == new.blockType {
+                    merged.append(old)
+                } else {
+                    merged.append(new)
+                }
+            }
+            blocks = merged
+        } else {
+            blocks = newBlocks
+        }
+    }
+
+    func commitBlock(id: UUID, newText: String) {
+        guard let index = blocks.firstIndex(where: { $0.id == id }) else { return }
+        blocks[index].text = newText
+        let reconstructed = MarkdownBlockParser.reconstruct(blocks)
+        // Update content without re-parsing blocks (we already have the canonical blocks).
+        isApplyingFileLoad = true
+        content = reconstructed
+        isDirty = content != lastSavedContent
+        let rendered = MarkdownRenderer.prepare(markdown: content, baseURL: currentDocumentBaseURL)
+        strippedContent = rendered.markdown
+        headingAnchors = rendered.headingAnchors
+        isApplyingFileLoad = false
+    }
+
+    /// Commit the current block and move focus to the next content block.
+    func commitAndAdvance(from id: UUID) {
+        editingBlockID = nil
+        guard let index = blocks.firstIndex(where: { $0.id == id }) else { return }
+        // Find the next non-separator block.
+        let remaining = blocks[(index + 1)...]
+        if let next = remaining.first(where: { $0.blockType != .separator }) {
+            editingBlockID = next.id
+        }
     }
 }

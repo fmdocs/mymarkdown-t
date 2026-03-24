@@ -42,9 +42,10 @@ targets:
       - package: swift-markdown-ui
         product: MarkdownUI
       # Quick Look 预览扩展，嵌入 .app/Contents/PlugIns/ 中。
-      - target: QLExtension
-        embed: true
-        codeSign: true
+      # 需要配置 DEVELOPMENT_TEAM 后才能启用（ValidateEmbeddedBinary 要求签名）。
+      # - target: QLExtension
+      #   embed: true
+      #   codeSign: true
     settings:
       base:
         PRODUCT_NAME: MyMarkdownT

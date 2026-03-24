@@ -127,11 +127,8 @@ struct ContentView: View {
                 editorPane
             case .preview:
                 previewPane
-            case .split:
-                HSplitView {
-                    editorPane
-                    previewPane
-                }
+            case .inline:
+                LiveMarkdownEditor(text: $state.content)
             }
         }
     }
